@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexusRAG — Multimodal Knowledge Assistant</title>
+  <meta name="description" content="Advanced multimodal RAG assistant powered by HyDE, multi-query expansion, RRF fusion, cross-encoder reranking and contextual compression." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/main.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════ TOPBAR ═══ -->
+<header class="topbar" id="topbar">
+  <div class="topbar-brand">
+    <div class="brand-icon">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+    </div>
+    <span class="brand-name">NexusRAG</span>
+    <span class="brand-tag" id="modelBadge">Loading…</span>
+  </div>
+
+  <div class="topbar-status">
+    <div class="status-indicator" id="statusIndicator">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusLabel">Connecting</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════ LAYOUT ════ -->
+<div class="app-layout" id="appLayout">
+
+  <!-- ══════════════════════════════════════════════════════ LEFT SIDEBAR ══ -->
+  <aside class="sidebar" id="sidebar">
+
+    <!-- Knowledge Base Stats -->
+    <section class="sidebar-section">
+      <div class="section-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/>
+        </svg>
+        <span>Knowledge Base</span>
+      </div>
+      <div class="kb-stats">
+        <div class="kb-stat">
+          <div class="kb-stat-icon kb-text-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <div class="kb-stat-body">
+            <span class="kb-stat-value" id="statText">—</span>
+            <span class="kb-stat-label">text chunks</span>
+          </div>
+        </div>
+        <div class="kb-stat">
+          <div class="kb-stat-icon kb-img-icon">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
+          <div class="kb-stat-body">
+            <span class="kb-stat-value" id="statImages">—</span>
+            <span class="kb-stat-label">images indexed</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Upload Section -->
+    <section class="sidebar-section">
+      <div class="section-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <span>Upload Files</span>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="drop-zone-title">Drop files here</p>
+        <p class="drop-zone-hint">or <label class="browse-link" for="fileInput">browse</label></p>
+        <p class="drop-zone-types">PDF · MD · TXT · JPG · PNG · WEBP</p>
+        <input type="file" id="fileInput" accept=".pdf,.md,.txt,.jpg,.jpeg,.png,.webp,.bmp" hidden />
+      </div>
+
+      <div id="uploadStatus" class="upload-feedback hidden"></div>
+    </section>
+
+    <!-- Indexed Files -->
+    <section class="sidebar-section sidebar-section--grow">
+      <div class="section-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span>Indexed Files</span>
+      </div>
+      <ul class="file-list" id="docList">
+        <li class="file-item file-item--placeholder">Loading…</li>
+      </ul>
+    </section>
+
+    <!-- Pipeline Legend -->
+    <section class="sidebar-section">
+      <div class="section-header">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>Pipeline Techniques</span>
+      </div>
+      <div class="pipeline-tags">
+        <div class="pipeline-tag pipeline-tag--hyde">
+          <span class="pipeline-tag-label">HyDE</span>
+          <span class="pipeline-tag-desc">Hypothetical doc embedding</span>
+        </div>
+        <div class="pipeline-tag pipeline-tag--mq">
+          <span class="pipeline-tag-label">MQ</span>
+          <span class="pipeline-tag-desc">Multi-query expansion</span>
+        </div>
+        <div class="pipeline-tag pipeline-tag--rrf">
+          <span class="pipeline-tag-label">RRF</span>
+          <span class="pipeline-tag-desc">Reciprocal Rank Fusion</span>
+        </div>
+        <div class="pipeline-tag pipeline-tag--ce">
+          <span class="pipeline-tag-label">CE</span>
+          <span class="pipeline-tag-desc">Cross-encoder reranking</span>
+        </div>
+        <div class="pipeline-tag pipeline-tag--cc">
+          <span class="pipeline-tag-label">CC</span>
+          <span class="pipeline-tag-desc">Contextual compression</span>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════ CHAT PANEL ══ -->
+  <main class="chat-panel" id="chatPanel">
+
+    <!-- Messages -->
+    <div class="messages-viewport" id="messagesViewport">
+      <div class="messages-container" id="messagesContainer">
+
+        <!-- Welcome message -->
+        <div class="message message--assistant" id="welcomeMsg">
+          <div class="message-avatar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+          </div>
+          <div class="message-body">
+            <div class="message-bubble">
+              <p class="welcome-heading">NexusRAG is ready</p>
+              <p class="welcome-sub">
+                Ask anything about your documents or images. The pipeline uses
+                <strong>HyDE</strong>, <strong>multi-query expansion</strong>,
+                <strong>RRF fusion</strong>, <strong>cross-encoder reranking</strong>,
+                and <strong>contextual compression</strong> to find the best answer.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Pipeline Trace Bar -->
+    <div class="trace-strip hidden" id="traceStrip">
+      <span class="trace-strip-label">Pipeline</span>
+      <div class="trace-strip-steps" id="traceSteps"></div>
+    </div>
+
+    <!-- Input Bar -->
+    <div class="input-bar" id="inputBar">
+      <div class="input-wrapper">
+        <textarea
+          id="queryInput"
+          class="query-textarea"
+          placeholder="Ask a question about your documents or images…"
+          rows="1"
+          aria-label="Query input"
+        ></textarea>
+        <button id="sendBtn" class="send-button" title="Send (Enter)" aria-label="Send message">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <p class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</p>
+    </div>
+
+  </main>
+</div>
+
+<script src="/static/js/chat.js"></script>
+</body>
+</html>

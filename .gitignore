@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment files
+.env
+.env.*
+
+# IDE/editor
+.vscode/
+.idea/
+
+# AI assistant workspace
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Databases / vector stores
+chroma_db/
+
+# Frontend generated assets
+frontend/static/thumbnails/
+
+# Logs
+*.log
+
+# Test / build artifacts
+.pytest_cache/
+.pyre/
+.mypy_cache/
+.cache/
