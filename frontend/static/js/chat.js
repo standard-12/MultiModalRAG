@@ -1,5 +1,5 @@
 /**
- * chat.js — NexusRAG frontend logic
+ * chat.js — VisionVault frontend logic
  *
  * Modules (logical sections):
  *   1. DOM references
@@ -100,8 +100,8 @@ function appendMessage(role, htmlContent) {
   const isUser = role === 'user';
 
   const avatarIcon = isUser
-    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="20,2 4,11 4,29 20,38 36,29 36,11"/><circle cx="20" cy="20" r="5" fill="currentColor"/></svg>`;
 
   const wrap = document.createElement('div');
   wrap.className = `message message--${role}`;
@@ -300,7 +300,7 @@ async function sendMessage() {
 function setUploadFeedback(message, variant /* 'loading'|'ok'|'err' */) {
   dom.uploadStatus.textContent = message;
   dom.uploadStatus.className   = `upload-feedback upload-feedback--${variant}`;
-  dom.uploadStatus.classList.remove('hidden');
+  // 'hidden' class is removed by setting className above, so nothing extra needed
 }
 
 async function uploadFile(file) {
@@ -328,13 +328,13 @@ async function refreshStatus() {
     const data = await API.status();
 
     const isOk = data.llm_connected;
-    dom.statusDot.className   = `status-dot ${isOk ? 'status-dot--ok' : 'status-dot--err'}`;
+    dom.statusDot.className     = isOk ? 'status-dot' : 'status-dot offline';
     dom.statusLabel.textContent = isOk ? 'Ready' : 'LLM offline';
     dom.modelBadge.textContent  = data.model || 'unknown';
     dom.statText.textContent    = data.stats?.text_chunks ?? '—';
     dom.statImages.textContent  = data.stats?.images      ?? '—';
   } catch {
-    dom.statusDot.className     = 'status-dot status-dot--err';
+    dom.statusDot.className     = 'status-dot offline';
     dom.statusLabel.textContent = 'Server offline';
   }
 }
@@ -353,7 +353,7 @@ async function refreshDocumentList() {
             <span class="file-badge file-badge--${f.kind}">${f.kind === 'doc' ? 'DOC' : 'IMG'}</span>
             ${escHtml(f.name)}
           </li>`).join('')
-      : '<li class="file-item file-item--placeholder">No files yet</li>';
+      : '<li class="file-item file-item--empty">No files indexed yet</li>';
   } catch { /* silent */ }
 }
 
@@ -389,6 +389,7 @@ dom.dropZone.addEventListener('dragover', e => {
 dom.dropZone.addEventListener('dragleave', () => {
   dom.dropZone.classList.remove('drop-zone--active');
 });
+
 dom.dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dom.dropZone.classList.remove('drop-zone--active');
