@@ -29,8 +29,6 @@ const dom = {
   dropZone:          document.getElementById('dropZone'),
   fileInput:         document.getElementById('fileInput'),
   uploadStatus:      document.getElementById('uploadStatus'),
-  traceStrip:        document.getElementById('traceStrip'),
-  traceSteps:        document.getElementById('traceSteps'),
 };
 
 /* ══════════════════════════════════════════════════════════════ 2. State ════ */
@@ -216,15 +214,6 @@ function renderPipelineDetails(details, bubble) {
   scrollToBottom();
 }
 
-/* ── Trace strip ─────────────────────────────────────────────────────────── */
-function renderTraceStrip(steps) {
-  if (!steps?.length || !dom.traceStrip || !dom.traceSteps) return;
-  dom.traceSteps.innerHTML = steps.map(s =>
-    `<span class="trace-step">${escHtml(s)}</span>`
-  ).join('');
-  dom.traceStrip.classList.remove('hidden');
-}
-
 /* ══════════════════════════════════════════════════════════ 6. Send flow ════ */
 async function sendMessage() {
   const query = dom.queryInput.value.trim();
@@ -234,8 +223,6 @@ async function sendMessage() {
   dom.sendBtn.disabled = true;
   dom.queryInput.value = '';
   autoResizeTextarea();
-  if (dom.traceStrip) dom.traceStrip.classList.add('hidden');
-  if (dom.traceSteps) dom.traceSteps.innerHTML = '';
 
   appendMessage('user', escHtml(query));
   const assistantBubble = appendTypingIndicator();
@@ -268,10 +255,6 @@ async function sendMessage() {
 
         if (payload.type === 'pipeline_details') {
           pendingDetails = payload;
-        }
-
-        if (payload.type === 'trace') {
-          renderTraceStrip(payload.steps);
         }
 
         if (payload.type === 'token') {
