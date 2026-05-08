@@ -78,6 +78,50 @@ class RetrievalService:
 
         self._graph = self._build_graph()
 
+    @staticmethod
+    def _content_terms(text: str) -> set[str]:
+        """Return meaningful lowercase terms for lightweight HyDE sanity checks."""
+        stopwords = {
+            "a", "an", "and", "are", "as", "at", "be", "by", "can", "could",
+            "do", "does", "for", "from", "give", "how", "i", "in", "is", "it",
+            "me", "of", "on", "or", "please", "summarize", "summary", "tell",
+            "that", "the", "this", "to", "what", "when", "where", "which",
+            "who", "why", "with", "would", "you",
+        }
+        terms = set(re.findall(r"[a-zA-Z][a-zA-Z0-9_-]{2,}", text.lower()))
+        return terms - stopwords
+
+    def _build_hyde_document(self, query: str) -> str:
+        query_terms = self._content_terms(query)
+        if not query_terms:
+            return query
+
+        # HyDE is only a retrieval aid. Keep it query-shaped and reject detached
+        # generations so a hallucinated paragraph cannot dominate recall.
+        hyde_prompt = ChatPromptTemplate.from_template(
+            "Create a concise hypothetical passage that could appear in a document "
+            "answering the user's question. Keep it generic and retrieval-focused. "
+            "Do not invent file names, titles, authors, dates, awards, or named "
+            "entities unless they appear in the question. Output ONLY the passage, "
+            "maximum 70 words.\n\nQuestion: {query}"
+        )
+
+        try:
+            hyde_document: str = (hyde_prompt | self.llm | StrOutputParser()).invoke(
+                {"query": query}
+            )
+        except Exception:
+            return query
+
+        hyde_document = " ".join(hyde_document.split())
+        hyde_terms = self._content_terms(hyde_document)
+        overlap = query_terms & hyde_terms
+
+        if not hyde_document or len(hyde_document.split()) > 90 or not overlap:
+            return query
+
+        return hyde_document
+
     # ── Graph construction ────────────────────────────────────────────────────
 
     def _build_graph(self):
@@ -103,17 +147,7 @@ class RetrievalService:
     def _expand_query(self, state: PipelineState) -> Dict[str, Any]:
         query = state["query"]
 
-        # HyDE: generate a hypothetical ideal answer for retrieval
-        hyde_prompt = ChatPromptTemplate.from_template(
-            "Write a short, factual paragraph that directly answers the question "
-            "below. Output ONLY the paragraph.\n\nQuestion: {query}"
-        )
-        try:
-            hyde_document: str = (hyde_prompt | self.llm | StrOutputParser()).invoke(
-                {"query": query}
-            )
-        except Exception:
-            hyde_document = query
+        hyde_document = self._build_hyde_document(query)
 
         # Multi-query: generate diverse reformulations to improve recall
         mq_prompt = ChatPromptTemplate.from_template(
