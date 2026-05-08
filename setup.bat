@@ -122,6 +122,7 @@ echo 8. Creating directories...
 
 mkdir docs 2>nul
 mkdir images 2>nul
+mkdir audio 2>nul
 mkdir uploads 2>nul
 mkdir chroma_db 2>nul
 mkdir frontend\static\thumbnails 2>nul

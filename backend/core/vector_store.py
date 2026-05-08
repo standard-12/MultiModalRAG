@@ -1,13 +1,16 @@
 """
 core/vector_store.py
 --------------------
-MultiModalVectorStore manages two ChromaDB persistent collections:
+MultiModalVectorStore manages three ChromaDB persistent collections:
 
-  text_docs   — text chunks (all-MiniLM-L6-v2, 384-dim, cosine)
-  image_docs  — image captions indexed via CLIP (clip-ViT-B-32, 512-dim, cosine)
+  text_docs   — text chunks          (all-MiniLM-L6-v2, 384-dim, cosine)
+  image_docs  — image captions/CLIP  (clip-ViT-B-32,    512-dim, cosine)
+  audio_docs  — audio transcripts    (all-MiniLM-L6-v2, 384-dim, cosine)
 
 Public interface is intentionally small:
-  add_text / add_image / search_text / search_images / get_stats / is_empty
+  add_text / add_image / add_audio /
+  search_text / search_images / search_audio /
+  get_stats / is_empty
 """
 
 import uuid
@@ -35,6 +38,12 @@ class MultiModalVectorStore:
         self.image_collection = self._client.get_or_create_collection(
             name="image_docs",
             embedding_function=self._clip_embedder,
+            metadata={"hnsw:space": "cosine"},
+        )
+        # Audio transcripts share the same text embedding space
+        self.audio_collection = self._client.get_or_create_collection(
+            name="audio_docs",
+            embedding_function=self._text_embedder,
             metadata={"hnsw:space": "cosine"},
         )
 
@@ -72,6 +81,17 @@ class MultiModalVectorStore:
         )
         return doc_id
 
+    def add_audio(self, chunk_text: str, metadata: Dict[str, Any]) -> str:
+        """Index an audio transcript chunk using the text embedding model."""
+        doc_id    = str(uuid.uuid4())
+        safe_meta = {k: str(v) for k, v in metadata.items()}
+        self.audio_collection.add(
+            ids=[doc_id],
+            documents=[chunk_text],
+            metadatas=[safe_meta],
+        )
+        return doc_id
+
     # ── Read / search operations ──────────────────────────────────────────────
 
     def search_text(self, query: str, n_results: int = 6) -> List[Dict[str, Any]]:
@@ -99,15 +119,29 @@ class MultiModalVectorStore:
         )
         return self._format_results(raw, modality="image")
 
+    def search_audio(self, query: str, n_results: int = 4) -> List[Dict[str, Any]]:
+        """Semantic search over audio transcript chunks."""
+        n = min(n_results, self.audio_collection.count())
+        if n == 0:
+            return []
+        raw = self.audio_collection.query(
+            query_texts=[query],
+            n_results=n,
+            include=["documents", "metadatas", "distances"],
+        )
+        return self._format_results(raw, modality="audio")
+
     # ── Stats ─────────────────────────────────────────────────────────────────
 
     def get_stats(self) -> Dict[str, int]:
         text_count  = self.text_collection.count()
         image_count = self.image_collection.count()
+        audio_count = self.audio_collection.count()
         return {
-            "text_chunks": text_count,
-            "images":      image_count,
-            "total":       text_count + image_count,
+            "text_chunks":   text_count,
+            "images":        image_count,
+            "audio_chunks":  audio_count,
+            "total":         text_count + image_count + audio_count,
         }
 
     def is_empty(self) -> bool:

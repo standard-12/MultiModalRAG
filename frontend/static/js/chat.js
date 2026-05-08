@@ -27,6 +27,7 @@ const dom = {
   modelBadge:        document.getElementById('modelBadge'),
   statText:          document.getElementById('statText'),
   statImages:        document.getElementById('statImages'),
+  statAudio:         document.getElementById('statAudio'),
   docList:           document.getElementById('docList'),
   dropZone:          document.getElementById('dropZone'),
   fileInput:         document.getElementById('fileInput'),
@@ -130,12 +131,21 @@ function renderSources(sources, bubble) {
 
   // Source chips
   const chips = sources.map(s => {
-    const typeClass = s.type === 'image' ? 'source-chip-type--img' : 'source-chip-type--txt';
-    const typeLabel = s.type === 'image' ? 'IMG' : 'TXT';
+    const typeClass = s.type === 'image'
+      ? 'source-chip-type--img'
+      : s.type === 'audio'
+        ? 'source-chip-type--audio'
+        : 'source-chip-type--txt';
+    const typeLabel = s.type === 'image' ? 'IMG' : s.type === 'audio' ? 'AUD' : 'TXT';
+    const extra = s.type === 'audio' && s.duration
+      ? ` <span class="source-chip-score">${s.duration}s</span>`
+      : s.type !== 'audio'
+        ? `<span class="source-chip-score">${s.score}</span>`
+        : '';
     return `<span class="source-chip" title="${escHtml(s.file)}">
       <span class="source-chip-type ${typeClass}">${typeLabel}</span>
       ${escHtml(s.title)}
-      <span class="source-chip-score">${s.score}</span>
+      ${extra}
     </span>`;
   }).join('');
 
@@ -211,7 +221,7 @@ function renderPipelineDetails(details, bubble) {
 
 /* ── Trace strip ─────────────────────────────────────────────────────────── */
 function renderTraceStrip(steps) {
-  if (!steps?.length) return;
+  if (!steps?.length || !dom.traceStrip || !dom.traceSteps) return;
   dom.traceSteps.innerHTML = steps.map(s =>
     `<span class="trace-step">${escHtml(s)}</span>`
   ).join('');
@@ -227,7 +237,8 @@ async function sendMessage() {
   dom.sendBtn.disabled = true;
   dom.queryInput.value = '';
   autoResizeTextarea();
-  dom.traceStrip.classList.add('hidden');
+  if (dom.traceStrip) dom.traceStrip.classList.add('hidden');
+  if (dom.traceSteps) dom.traceSteps.innerHTML = '';
 
   appendMessage('user', escHtml(query));
   const assistantBubble = appendTypingIndicator();
@@ -331,8 +342,9 @@ async function refreshStatus() {
     dom.statusDot.className     = isOk ? 'status-dot' : 'status-dot offline';
     dom.statusLabel.textContent = isOk ? 'Ready' : 'LLM offline';
     dom.modelBadge.textContent  = data.model || 'unknown';
-    dom.statText.textContent    = data.stats?.text_chunks ?? '—';
-    dom.statImages.textContent  = data.stats?.images      ?? '—';
+    dom.statText.textContent    = data.stats?.text_chunks  ?? '—';
+    dom.statImages.textContent  = data.stats?.images       ?? '—';
+    if (dom.statAudio) dom.statAudio.textContent = data.stats?.audio_chunks ?? '—';
   } catch {
     dom.statusDot.className     = 'status-dot offline';
     dom.statusLabel.textContent = 'Server offline';
@@ -345,12 +357,15 @@ async function refreshDocumentList() {
     const all  = [
       ...(data.documents || []).map(f => ({ name: f, kind: 'doc' })),
       ...(data.images    || []).map(f => ({ name: f, kind: 'img' })),
+      ...(data.audio     || []).map(f => ({ name: f, kind: 'audio' })),
     ];
 
     dom.docList.innerHTML = all.length
       ? all.map(f => `
           <li class="file-item">
-            <span class="file-badge file-badge--${f.kind}">${f.kind === 'doc' ? 'DOC' : 'IMG'}</span>
+            <span class="file-badge file-badge--${f.kind}">${
+              f.kind === 'doc' ? 'DOC' : f.kind === 'img' ? 'IMG' : 'AUD'
+            }</span>
             ${escHtml(f.name)}
           </li>`).join('')
       : '<li class="file-item file-item--empty">No files indexed yet</li>';

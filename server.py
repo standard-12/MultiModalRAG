@@ -24,16 +24,19 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from backend.api.routes import register_routes
 from backend.config.settings import (
+    AUDIO_DIR,
     CHROMA_DIR,
     DOCS_DIR,
     IMAGES_DIR,
     LLM_MODEL,
     OLLAMA_HOST,
+    SUPPORTED_AUDIO_EXTENSIONS,
     SUPPORTED_IMG_EXTENSIONS,
     THUMB_DIR,
     ensure_directories,
 )
 from backend.core.vector_store import MultiModalVectorStore
+from backend.ingestion.audio_ingestion import AudioIngestionService
 from backend.ingestion.document_ingestion import DocumentIngestionService
 from backend.ingestion.image_ingestion import ImageIngestionService
 from backend.services.retrieval_service import RetrievalService
@@ -55,10 +58,11 @@ class AppContainer:
     """Holds lazily-initialised singleton service instances."""
 
     def __init__(self):
-        self.vector_store:      MultiModalVectorStore   | None = None
+        self.vector_store:      MultiModalVectorStore    | None = None
         self.doc_ingestion:     DocumentIngestionService | None = None
-        self.img_ingestion:     ImageIngestionService   | None = None
-        self.retrieval_service: RetrievalService        | None = None
+        self.img_ingestion:     ImageIngestionService    | None = None
+        self.audio_ingestion:   AudioIngestionService    | None = None
+        self.retrieval_service: RetrievalService         | None = None
 
     def initialise(self):
         """Boot all services; safe to call multiple times (no-op after first)."""
@@ -79,6 +83,9 @@ class AppContainer:
             thumbnail_dir=str(THUMB_DIR),
         )
 
+        print("[startup] Loading Audio Ingestion Service …")
+        self.audio_ingestion = AudioIngestionService()
+
         print("[startup] Building Retrieval Service (RAG pipeline) …")
         self.retrieval_service = RetrievalService(
             vector_store=self.vector_store,
@@ -88,13 +95,15 @@ class AppContainer:
 
         # Auto-ingest on first run if knowledge base is empty
         if self.vector_store.is_empty():
-            print("[startup] Knowledge base empty — ingesting docs/ and images/ …")
+            print("[startup] Knowledge base empty — ingesting docs/, images/, audio/ …")
             doc_stats = self.doc_ingestion.ingest_directory(
                 str(DOCS_DIR), self.vector_store
             )
             print(f"[startup] Text ingestion: {doc_stats}")
             img_count = self._ingest_image_directory(str(IMAGES_DIR))
             print(f"[startup] Images ingested: {img_count}")
+            audio_count = self._ingest_audio_directory(str(AUDIO_DIR))
+            print(f"[startup] Audio files ingested: {audio_count}")
 
         print("[startup] Ready.\n")
 
@@ -117,6 +126,21 @@ class AppContainer:
                             "content_type": "image",
                         },
                     )
+                    count += 1
+        return count
+
+    def _ingest_audio_directory(self, directory: str) -> int:
+        """Walk *directory* and ingest all supported audio files."""
+        count = 0
+        for fp in Path(directory).rglob("*"):
+            if fp.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS:
+                records = self.audio_ingestion.process_audio(str(fp))
+                if records:
+                    for rec in records:
+                        self.vector_store.add_audio(
+                            chunk_text=rec["chunk_text"],
+                            metadata=rec,
+                        )
                     count += 1
         return count
 

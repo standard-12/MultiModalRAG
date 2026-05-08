@@ -89,6 +89,11 @@
           <div class="vault-stat-value" id="statImages">—</div>
           <div class="vault-stat-key">Images</div>
         </div>
+        <div class="vault-stat-divider"></div>
+        <div class="vault-stat">
+          <div class="vault-stat-value" id="statAudio">—</div>
+          <div class="vault-stat-key">Audio</div>
+        </div>
       </div>
     </div>
 
@@ -105,9 +110,9 @@
           </svg>
           <p class="drop-zone-text">Drop files here</p>
           <p class="drop-zone-sub">or <label class="drop-zone-browse" for="fileInput">browse</label></p>
-          <p class="drop-zone-types">PDF · MD · TXT · PNG · JPG</p>
+          <p class="drop-zone-types">PDF · MD · TXT · PNG · JPG · MP3 · WAV · M4A</p>
         </div>
-        <input type="file" id="fileInput" accept=".pdf,.md,.txt,.jpg,.jpeg,.png,.webp,.bmp" hidden multiple />
+        <input type="file" id="fileInput" accept=".pdf,.md,.txt,.jpg,.jpeg,.png,.webp,.bmp,.mp3,.wav,.m4a,.ogg,.flac,.webm" hidden multiple />
       </div>
 
       <div id="uploadStatus" class="upload-feedback hidden"></div>
@@ -168,6 +173,10 @@
               <svg viewBox="0 0 16 16" fill="none"><path d="M1 8h14M8 1v14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/></svg>
               Contextual reasoning
             </div>
+            <div class="welcome-chip">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M2 8a6 6 0 0 0 6 6M2 8a6 6 0 0 1 6-6M14 8a6 6 0 0 1-6 6M14 8a6 6 0 0 0-6-6" stroke="currentColor" stroke-width="1.5"/><path d="M5 4h6M5 12h6" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
+              Audio transcription (Whisper)
+            </div>
           </div>
         </div>
 
@@ -189,6 +198,11 @@
             <path d="M10.894 2.553a1 1 0 0 0-1.788 0l-7 14a1 1 0 0 0 1.169 1.409l5-1.429A1 1 0 0 0 9 15.571V11a1 1 0 1 1 2 0v4.571a1 1 0 0 0 .725.962l5 1.428a1 1 0 0 0 1.17-1.408l-7-14Z"/>
           </svg>
         </button>
+      </div>
+      <!-- Trace Strip (shows pipeline steps) -->
+      <div id="traceStrip" class="trace-strip hidden">
+        <div class="trace-label">Pipeline Trace:</div>
+        <div id="traceSteps" class="trace-steps"></div>
       </div>
       <p class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</p>
     </div>

@@ -57,8 +57,10 @@ def get_status():
 def list_documents():
     """List all files currently present in the docs/ and images/ directories."""
     from ..config.settings import (
+        AUDIO_DIR,
         DOCS_DIR,
         IMAGES_DIR,
+        SUPPORTED_AUDIO_EXTENSIONS,
         SUPPORTED_DOC_EXTENSIONS,
         SUPPORTED_IMG_EXTENSIONS,
     )
@@ -73,7 +75,12 @@ def list_documents():
         for f in IMAGES_DIR.iterdir()
         if f.is_file() and f.suffix.lower() in SUPPORTED_IMG_EXTENSIONS
     )
-    return jsonify({"documents": docs, "images": images})
+    audio = sorted(
+        f.name
+        for f in AUDIO_DIR.iterdir()
+        if f.is_file() and f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS
+    )
+    return jsonify({"documents": docs, "images": images, "audio": audio})
 
 
 # ── /api/chat ─────────────────────────────────────────────────────────────────
@@ -142,8 +149,10 @@ def upload_file():
     return a JSON summary of what was indexed.
     """
     from ..config.settings import (
+        AUDIO_DIR,
         DOCS_DIR,
         IMAGES_DIR,
+        SUPPORTED_AUDIO_EXTENSIONS,
         SUPPORTED_DOC_EXTENSIONS,
         SUPPORTED_IMG_EXTENSIONS,
     )
@@ -207,5 +216,29 @@ def upload_file():
                 }
             )
         return jsonify({"error": "Failed to process image"}), 500
+
+    # ── Audio upload ──────────────────────────────────────────────────────────
+    if ext in SUPPORTED_AUDIO_EXTENSIONS:
+        save_path = AUDIO_DIR / filename
+        file.save(str(save_path))
+
+        records = _container.audio_ingestion.process_audio(str(save_path))
+        if not records:
+            return jsonify({"error": "Transcription failed or empty result"}), 500
+
+        for rec in records:
+            _container.vector_store.add_audio(
+                chunk_text=rec["chunk_text"],
+                metadata=rec,
+            )
+
+        return jsonify(
+            {
+                "message":  f"Indexed {len(records)} chunk(s) from {filename}",
+                "type":     "audio",
+                "chunks":   len(records),
+                "preview":  records[0]["transcript"][:300] if records else "",
+            }
+        )
 
     return jsonify({"error": f"Unsupported file type: {ext}"}), 400

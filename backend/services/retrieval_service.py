@@ -43,6 +43,7 @@ class PipelineState(TypedDict):
     expanded_queries:   List[str]
     text_results:       List[Dict[str, Any]]
     image_results:      List[Dict[str, Any]]
+    audio_results:      List[Dict[str, Any]]
     reranked_results:   List[Dict[str, Any]]
     compressed_context: str
     answer:             str
@@ -150,6 +151,8 @@ class RetrievalService:
         text_docs:    Dict[str, Dict]  = {}
         image_scores: Dict[str, float] = {}
         image_docs:   Dict[str, Dict]  = {}
+        audio_scores: Dict[str, float] = {}
+        audio_docs:   Dict[str, Dict]  = {}
 
         for q in all_queries:
             for rank, doc in enumerate(self.vector_store.search_text(q, n_results=6)):
@@ -162,6 +165,11 @@ class RetrievalService:
                 image_scores[did] = image_scores.get(did, 0.0) + 1.0 / (K + rank + 1)
                 image_docs[did]   = doc
 
+            for rank, doc in enumerate(self.vector_store.search_audio(q, n_results=4)):
+                did = doc["id"]
+                audio_scores[did] = audio_scores.get(did, 0.0) + 1.0 / (K + rank + 1)
+                audio_docs[did]   = doc
+
         def _rrf_sort(scores, docs, top_n):
             return sorted(
                 [{**docs[i], "rrf_score": scores[i]} for i in docs],
@@ -171,13 +179,16 @@ class RetrievalService:
 
         text_results  = _rrf_sort(text_scores,  text_docs,  8)
         image_results = _rrf_sort(image_scores, image_docs, 3)
+        audio_results = _rrf_sort(audio_scores, audio_docs, 4)
 
         return {
             "text_results":  text_results,
             "image_results": image_results,
+            "audio_results": audio_results,
             "pipeline_trace": [
                 f"RRF fusion over {len(all_queries)} queries → "
-                f"{len(text_results)} text + {len(image_results)} image results"
+                f"{len(text_results)} text + {len(image_results)} image "
+                f"+ {len(audio_results)} audio results"
             ],
         }
 
@@ -187,6 +198,7 @@ class RetrievalService:
         query         = state["query"]
         text_results  = state["text_results"]
         image_results = state["image_results"]
+        audio_results = state["audio_results"]
 
         if text_results:
             pairs  = [(query, doc["text"]) for doc in text_results]
@@ -197,9 +209,22 @@ class RetrievalService:
                 text_results, key=lambda x: x["rerank_score"], reverse=True
             )[:5]
 
+        # Also rerank audio transcript chunks with the cross-encoder
+        if audio_results:
+            pairs  = [(query, doc["text"]) for doc in audio_results]
+            scores = self.reranker.predict(pairs)
+            for doc, score in zip(audio_results, scores):
+                doc["rerank_score"] = float(score)
+            audio_results = sorted(
+                audio_results, key=lambda x: x["rerank_score"], reverse=True
+            )[:3]
+
         return {
-            "reranked_results": text_results + image_results,
-            "pipeline_trace":   [f"Cross-encoder reranked {len(text_results)} text passages"],
+            "reranked_results": text_results + image_results + audio_results,
+            "pipeline_trace":   [
+                f"Cross-encoder reranked {len(text_results)} text "
+                f"+ {len(audio_results)} audio passages"
+            ],
         }
 
     # ── Node: contextual compression ─────────────────────────────────────────
@@ -232,10 +257,16 @@ class RetrievalService:
                     parts.append(doc["text"])
             else:
                 meta = doc["metadata"]
-                parts.append(
-                    f"[Image: {meta.get('file_name', 'image')}]\n"
-                    f"Caption: {doc['text']}"
-                )
+                if doc["modality"] == "image":
+                    parts.append(
+                        f"[Image: {meta.get('file_name', 'image')}]\n"
+                        f"Caption: {doc['text']}"
+                    )
+                else:  # audio
+                    parts.append(
+                        f"[Audio transcript: {meta.get('file_name', 'audio')}]\n"
+                        f"{doc['text']}"
+                    )
 
         return {
             "compressed_context": "\n\n---\n\n".join(parts),
@@ -302,18 +333,29 @@ class RetrievalService:
                         }
                     )
             else:
-                fname = meta.get("file_name", "image")
+                fname = meta.get("file_name", "unknown")
                 if fname not in seen_titles:
                     seen_titles.add(fname)
-                    sources.append(
-                        {
-                            "type":      "image",
-                            "title":     fname,
-                            "file":      fname,
-                            "thumbnail": meta.get("thumbnail", ""),
-                            "score":     round(doc.get("rrf_score", 0), 3),
-                        }
-                    )
+                    if doc["modality"] == "image":
+                        sources.append(
+                            {
+                                "type":      "image",
+                                "title":     fname,
+                                "file":      fname,
+                                "thumbnail": meta.get("thumbnail", ""),
+                                "score":     round(doc.get("rrf_score", 0), 3),
+                            }
+                        )
+                    else:  # audio
+                        sources.append(
+                            {
+                                "type":     "audio",
+                                "title":    meta.get("title", fname),
+                                "file":     fname,
+                                "duration": meta.get("duration_s", "?"),
+                                "score":    round(doc.get("rrf_score", 0), 3),
+                            }
+                        )
 
         return {
             "answer":         answer,
@@ -337,6 +379,7 @@ class RetrievalService:
             "expanded_queries":   [],
             "text_results":       [],
             "image_results":      [],
+            "audio_results":      [],
             "reranked_results":   [],
             "compressed_context": "",
             "answer":             "",
@@ -345,8 +388,8 @@ class RetrievalService:
         }
         result = self._graph.invoke(initial_state)
 
-        # Merge text + image results and sort by RRF score for the UI table
-        all_retrieved = result["text_results"] + result["image_results"]
+        # Merge text + image + audio results and sort by RRF score for the UI table
+        all_retrieved = result["text_results"] + result["image_results"] + result["audio_results"]
         all_retrieved.sort(key=lambda x: x.get("rrf_score", 0), reverse=True)
         rrf_results = [
             {
