@@ -1,5 +1,5 @@
 /**
- * chat.js — VisionVault frontend logic
+ * chat.js — Recall frontend logic
  *
  * Modules (logical sections):
  *   1. DOM references
@@ -22,9 +22,6 @@ const dom = {
   messagesViewport:  document.getElementById('messagesViewport'),
   queryInput:        document.getElementById('queryInput'),
   sendBtn:           document.getElementById('sendBtn'),
-  statusDot:         document.getElementById('statusDot'),
-  statusLabel:       document.getElementById('statusLabel'),
-  modelBadge:        document.getElementById('modelBadge'),
   statText:          document.getElementById('statText'),
   statImages:        document.getElementById('statImages'),
   statAudio:         document.getElementById('statAudio'),
@@ -338,17 +335,10 @@ async function refreshStatus() {
   try {
     const data = await API.status();
 
-    const isOk = data.llm_connected;
-    dom.statusDot.className     = isOk ? 'status-dot' : 'status-dot offline';
-    dom.statusLabel.textContent = isOk ? 'Ready' : 'LLM offline';
-    dom.modelBadge.textContent  = data.model || 'unknown';
     dom.statText.textContent    = data.stats?.text_chunks  ?? '—';
     dom.statImages.textContent  = data.stats?.images       ?? '—';
     if (dom.statAudio) dom.statAudio.textContent = data.stats?.audio_chunks ?? '—';
-  } catch {
-    dom.statusDot.className     = 'status-dot offline';
-    dom.statusLabel.textContent = 'Server offline';
-  }
+  } catch { /* statistics stay unchanged if the server is unavailable */ }
 }
 
 async function refreshDocumentList() {
