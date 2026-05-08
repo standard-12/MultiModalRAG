@@ -41,3 +41,7 @@ frontend/static/thumbnails/
 .pyre/
 .mypy_cache/
 .cache/
+
+docs/
+images/
+audio/
